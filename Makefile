@@ -6,5 +6,5 @@ gcloud_auth:
 	gcloud auth login
 
 upload_gcs:
-  git archive HEAD -o /tmp/${GIT_HASH}.zip
-  gcloud storage cp /tmp/${GIT_HASH}.zip gs://code_deployment/llm_worker
+	git archive HEAD -o /tmp/${GIT_HASH}.zip
+	gcloud storage cp /tmp/${GIT_HASH}.zip gs://code_deployment/llm_worker/${GIT_HASH}.zip
