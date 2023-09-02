@@ -15,7 +15,26 @@ if [ ! -d "$LOG_DIR" ]; then
   fi
 fi
 
+
 (
+# Install dependencies from apt
+apt-get update
+apt-get install -yq \
+    git build-essential supervisor python python-dev python-pip libffi-dev \
+    libssl-dev
+
+# Install logging monitor. The monitor will automatically pickup logs send to
+# syslog.
+curl -s "https://storage.googleapis.com/signals-agents/logging/google-fluentd-install.sh" | bash
+service google-fluentd restart &
+
+
+REDISHOST=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/redis-host" \
+            -H "Metadata-Flavor: Google")
+REDISPORT=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/redis-port" \
+            -H "Metadata-Flavor: Google")
+
+
 # created local code directory if it does not exist
 if [ ! -d "$LOCAL_CODE_DIR" ]; then
   echo "$(date -u) code directory $LOCAL_CODE_DIR does not exist. Make now..."
@@ -73,6 +92,25 @@ do
     echo "$(date -u) failed to unzip new release file (${LOCAL_CODE_DIR}/${new_release})"
     continue
   fi
+
+  pip install --upgrade pip virtualenv
+  virtualenv /app/env
+  /app/env/bin/pip install -r /app/requirements.txt
+
+  # Configure supervisor to run the app.
+  cat >/etc/supervisor/conf.d/pythonapp.conf << EOF
+  [program:pythonapp]
+  directory=/app
+  environment=HOME="/home/pythonapp",USER="pythonapp",REDISHOST=$REDISHOST,REDISPORT=$REDISPORT
+  command=/app/env/bin/gunicorn main:app --bind 0.0.0:8080
+  autostart=true
+  autorestart=true
+  user=pythonapp
+  stdout_logfile=syslog
+  stderr_logfile=syslog
+EOF
+  supervisorctl reread
+  supervisorctl update
 
   echo "$(date -u) complete release new release: ${zipfile_name}"
 done
